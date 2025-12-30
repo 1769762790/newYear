@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+    <title>祝卓然天天开心 永远18岁</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@700;900&display=swap');
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body, html {
+            height: 100%;
+            overflow: hidden;
+            background: #000;
+            font-family: 'Noto Sans SC', 'Arial Black', sans-serif;
+            color: #fff;
+            background-image: radial-gradient(rgba(255, 215, 0, 0.1) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        canvas { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+        }
+
+        #particle-countdown, #snow-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+<canvas id="fireworks"></canvas>
+<canvas id="particle-countdown"></canvas>
+<canvas id="snow-canvas"></canvas>
+
+<script>
+    const isMobile = /Mobile|Android|iOS/.test(navigator.userAgent);
+    const dpr = window.devicePixelRatio || 1;
+
+    const fireworksCanvas = document.getElementById('fireworks');
+    const particleCanvas = document.getElementById('particle-countdown');
+    const snowCanvas = document.getElementById('snow-canvas');
+
+    const ctx = fireworksCanvas.getContext('2d');
+    const pctx = particleCanvas.getContext('2d');
+    const sctx = snowCanvas.getContext('2d');
+
+    let width, height;
+    let resizeTimer;
+    
+    function resize() {
+        width = window.innerWidth;
+        height = window.innerHeight;
+
+        // 适配设备像素比，解决模糊
+        fireworksCanvas.width = width * dpr;
+        fireworksCanvas.height = height * dpr;
+        particleCanvas.width = width * dpr;
+        particleCanvas.height = height * dpr;
+        snowCanvas.width = width * dpr;
+        snowCanvas.height = height * dpr;
+
+        fireworksCanvas.style.width = `${width}px`;
+        fireworksCanvas.style.height = `${height}px`;
+        particleCanvas.style.width = `${width}px`;
+        particleCanvas.style.height = `${height}px`;
+        snowCanvas.style.width = `${width}px`;
+        snowCanvas.style.height = `${height}px`;
+
+        ctx.scale(dpr, dpr);
+        pctx.scale(dpr, dpr);
+        sctx.scale(dpr, dpr);
+    }
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(resize, 100);
+    });
+    resize();
+
+    let fireworks = [];
+    let textParticles = [];
+    let snowflakes = [];
+    const particleStartTime = Date.now();
+
+    // ==================== 烟花类 ====================
+    class Firework {
+        constructor() {
+            this.x = Math.random() * width;
+            this.y = height;
+            this.targetY = Math.random() * (height * 0.6);
+            this.speed = 3 + Math.random() * 3;
+            this.hue = Math.random() * 360;
+            this.brightness = 60 + Math.random() * 40;
+            this.trail = [];
+            this.exploded = false;
+            this.particles = [];
+            this.size = 2 + Math.random() * 2;
+            this.shape = ['circle', 'heart', 'star', 'snowflake'][Math.floor(Math.random() * 4)];
+        }
+        update() {
+            if (!this.exploded) {
+                this.x += (Math.random() - 0.5) * 0.8;
+                this.y -= this.speed;
+                this.trail.push({ x: this.x, y: this.y });
+                if (this.trail.length > 30) this.trail.shift();
+                if (this.y <= this.targetY) this.explode();
+            } else {
+                this.particles.forEach(p => p.update());
+                this.particles = this.particles.filter(p => p.alpha > 0);
+            }
+        }
+        draw() {
+            if (!this.exploded) {
+                ctx.beginPath();
+                ctx.moveTo(this.x, this.y);
+                this.trail.forEach(p => ctx.lineTo(p.x, p.y));
+                ctx.strokeStyle = `hsla(${this.hue}, 100%, ${this.brightness}%, 0.8)`;
+                ctx.lineWidth = this.size;
+                ctx.stroke();
+
+                ctx.fillStyle = `hsla(${this.hue}, 100%, 90%, 1)`;
+                ctx.fillRect(this.x - this.size/2, this.y - this.size/2, this.size, this.size);
+            } else {
+                this.particles.forEach(p => p.draw());
+            }
+        }
+        explode() {
+            this.exploded = true;
+            const count = isMobile ? 150 + Math.random() * 80 : 300 + Math.random() * 150;
+            const scale = 4 + Math.random() * 3;
+
+            if (this.shape === 'circle') {
+                for (let i = 0; i < count; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const velocity = 1 + Math.random() * 3;
+                    this.particles.push(new Particle(this.x, this.y, angle, velocity, this.hue));
+                }
+            } else if (this.shape === 'heart') {
+                for (let i = 0; i < count; i++) {
+                    const t = (i / count) * Math.PI * 2;
+                    const xt = 16 * Math.pow(Math.sin(t), 3);
+                    const yt = -(13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t));
+                    const dist = Math.sqrt(xt*xt + yt*yt) || 1;
+                    const angle = Math.atan2(yt, xt);
+                    const velocity = (1 + Math.random() * 2) * (dist / 16);
+                    this.particles.push(new Particle(this.x, this.y, angle, velocity * scale, this.hue));
+                }
+            } else if (this.shape === 'star' || this.shape === 'snowflake') {
+                for (let i = 0; i < count; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const velocity = 1 + Math.random() * 4;
+                    this.particles.push(new Particle(this.x, this.y, angle, velocity * scale, this.hue));
+                }
+            }
+
+            if (Math.random() < 0.1) {
+                setTimeout(() => {
+                    const secondary = new Firework();
+                    secondary.x = this.x + (Math.random() - 0.5) * 50;
+                    secondary.y = this.y + (Math.random() - 0.5) * 50;
+                    secondary.targetY = secondary.y - 10;
+                    secondary.shape = this.shape;
+                    secondary.explode();
+                    fireworks.push(secondary);
+                }, 200);
+            }
+        }
+    }
+
+    // ==================== 烟花粒子类 ====================
+    class Particle {
+        constructor(x, y, angle, velocity, hue) {
+            this.x = x;
+            this.y = y;
+            this.vx = Math.cos(angle) * velocity;
+            this.vy = Math.sin(angle) * velocity;
+            this.hue = hue + Math.random() * 90 - 45;
+            this.alpha = 1;
+            this.friction = 0.98;
+            this.gravity = 0.05;
+            this.size = 2 + Math.random() * 3;
+        }
+        update() {
+            this.vx *= this.friction;
+            this.vy *= this.friction;
+            this.vy += this.gravity;
+            this.x += this.vx;
+            this.y += this.vy;
+            this.alpha -= 0.015;
+        }
+        draw() {
+            ctx.save();
+            ctx.globalAlpha = this.alpha;
+            ctx.fillStyle = `hsl(${this.hue}, 100%, 70%)`;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+    }
+
+    // ==================== 文字粒子类 ====================
+    class TextParticle {
+        constructor(targetX, targetY) {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = Math.max(width, height) * 0.9;
+            this.x = width / 2 + Math.cos(angle) * dist;
+            this.y = height / 2 + Math.sin(angle) * dist;
+            this.targetX = targetX;
+            this.targetY = targetY;
+            this.vx = 0;
+            this.vy = 0;
+            // 粒子大小跟随屏幕宽度线性适配
+            this.size = isMobile ? Math.min((width / 375) * 1, 1.5) : 1;
+            const baseHues = [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330];
+            this.hue = baseHues[Math.floor(Math.random() * baseHues.length)] + Math.random() * 20;
+            this.alpha = 1;
+            this.reachedTarget = false;
+        }
+        update(timeSinceStart, isDispersing = false) {
+            if (isDispersing) {
+                this.vx += (this.x - width/2) * 0.002;
+                this.vy += (this.y - height/2) * 0.002;
+                this.alpha -= 0.02;
+            } else {
+                const dx = this.targetX - this.x;
+                const dy = this.targetY - this.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const strength = timeSinceStart < 2000 ? 0.015 : 0.07;
+                
+                if (dist < 2) {
+                    this.reachedTarget = true;
+                } else {
+                    this.vx += dx * strength;
+                    this.vy += dy * strength;
+                }
+                
+                this.vx *= 0.93;
+                this.vy *= 0.93;
+            }
+            this.x += this.vx;
+            this.y += this.vy;
+        }
+        draw(timeSinceStart, isDispersing = false) {
+            pctx.save();
+            const hue = (this.hue + Date.now() * 0.01) % 360;
+            pctx.fillStyle = `hsl(${hue}, 100%, 70%)`;
+            let alpha = 0.9;
+            if (timeSinceStart < 2500) alpha = Math.min(timeSinceStart / 1500, 0.9);
+            pctx.globalAlpha = isDispersing ? this.alpha : alpha;
+            pctx.beginPath();
+            pctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+            pctx.fill();
+            pctx.restore();
+        }
+    }
+
+    // ==================== 创建文字粒子（核心适配逻辑修改） ====================
+    function createTextParticles(text, fontSize = 130, lineHeight = 190) {
+        textParticles = [];
+        let adaptiveFontSize, adaptiveLineHeight;
+
+        if (isMobile) {
+            // ========== 动态适配核心逻辑：根据屏幕宽高和文字内容计算不溢出的字体大小 ==========
+            const lines = text.split('\n');
+            // 1. 计算关键参数
+            const maxLineChars = Math.max(...lines.map(line => line.length)); // 最长行的字符数
+            const lineCount = lines.length; // 文字总行数
+            const horizontalMargin = 0.1; // 横向留10%边距
+            const verticalMargin = 0.2; // 纵向留20%边距
+            
+            // 2. 计算横向最大可用字体大小（保证最长行不溢出）
+            // 中文字符宽高比≈1，所以用可用宽度 / 字符数 * 0.8（预留少量空间）
+            const maxWidthForText = width * (1 - horizontalMargin);
+            const fontSizeByWidth = (maxWidthForText / maxLineChars) * 0.8;
+            
+            // 3. 计算纵向最大可用字体大小（保证所有行不溢出）
+            // 行高≈字体大小的1.5倍，所以可用高度 / 行数 / 1.5
+            const maxHeightForText = height * (1 - verticalMargin);
+            const fontSizeByHeight = (maxHeightForText / lineCount) / 1.5;
+            
+            // 4. 最终字体大小取横向/纵向最小值，避免溢出
+            adaptiveFontSize = Math.min(fontSizeByWidth, fontSizeByHeight);
+            
+            // 5. 限制字体大小上下限，避免极端情况（过小/过大）
+            adaptiveFontSize = Math.min(Math.max(adaptiveFontSize, 25), 90);
+            
+            // 6. 行高跟随字体大小动态调整（行高=字体大小*1.5，保证行间距合理）
+            adaptiveLineHeight = adaptiveFontSize * 1.5;
+        } else {
+            // 桌面端保持原逻辑
+            adaptiveFontSize = fontSize;
+            adaptiveLineHeight = lineHeight;
+        }
+
+        // 设置字体样式
+        pctx.font = `bold ${adaptiveFontSize}px 'Noto Sans SC', Arial Black`;
+        pctx.textAlign = 'center';
+        pctx.textBaseline = 'middle';
+        pctx.fillStyle = '#fff';
+
+        // 绘制文字（计算居中位置）
+        const lines = text.split('\n');
+        const totalHeight = lines.length * adaptiveLineHeight;
+        const baseY = height / 2 - totalHeight / 2 + adaptiveFontSize / 2;
+
+        lines.forEach((line, i) => {
+            pctx.fillText(line, width / 2, baseY + i * adaptiveLineHeight);
+        });
+
+        // 生成文字粒子（适配dpr）
+        const imageData = pctx.getImageData(0, 0, width * dpr, height * dpr);
+        const data = imageData.data;
+        const sampleStep = isMobile ? 2 : 3;
+
+        for (let y = 0; y < height; y += sampleStep) {
+            for (let x = 0; x < width; x += sampleStep) {
+                const index = ((y * dpr) * (width * dpr) + (x * dpr)) * 4;
+                if (data[index + 3] > 100) {
+                    textParticles.push(new TextParticle(x, y));
+                }
+            }
+        }
+        pctx.clearRect(0, 0, width, height);
+        return textParticles;
+    }
+
+    // ==================== 检测文字粒子是否全部聚合完成 ====================
+    function isAllParticlesReachedTarget() {
+        if (textParticles.length === 0) return false;
+        const reachedCount = textParticles.filter(p => p.reachedTarget).length;
+        return reachedCount / textParticles.length > 0.95;
+    }
+
+    // ==================== 雪花类 ====================
+    class Snowflake {
+        constructor() {
+            this.x = Math.random() * width;
+            this.y = -10 - Math.random() * 50;
+            // 雪花大小线性适配屏幕宽度
+            this.size = isMobile ? Math.min((width / 375) * (2 + Math.random() * 4), 6) : (2 + Math.random() * 4);
+            this.speedY = 0.5 + Math.random() * 1.5;
+            this.speedX = -0.5 + Math.random() * 1;
+            this.opacity = 0.6 + Math.random() * 0.4;
+            this.angle = Math.random() * Math.PI * 2;
+            this.angleSpeed = 0.01 + Math.random() * 0.02;
+        }
+        update() {
+            this.y += this.speedY;
+            this.x += this.speedX;
+            this.angle += this.angleSpeed;
+            if (this.y > height + 10) {
+                this.y = -10;
+                this.x = Math.random() * width;
+            }
+        }
+        draw() {
+            sctx.save();
+            sctx.globalAlpha = this.opacity;
+            sctx.translate(this.x, this.y);
+            sctx.rotate(this.angle);
+            sctx.strokeStyle = '#ffffff';
+            // 雪花线条宽度线性适配
+            sctx.lineWidth = isMobile ? Math.min((width / 375) * 1.5, 2) : 1.5;
+            sctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+                sctx.moveTo(0, 0);
+                sctx.lineTo(this.size, 0);
+                sctx.rotate(Math.PI / 3);
+            }
+            sctx.stroke();
+            sctx.restore();
+        }
+    }
+
+    function initSnowflakes() {
+        const count = isMobile ? 50 : 120;
+        snowflakes = [];
+        for (let i = 0; i < count; i++) {
+            snowflakes.push(new Snowflake());
+        }
+    }
+    initSnowflakes();
+
+    // ==================== 文字切换逻辑 ====================
+    let isDispersing = false;
+    let secondTextTimer = null;
+
+    // 初始显示：2026 新年快乐
+    createTextParticles('2026\n新年快乐', 130, 190);
+
+    // 第一次切换：4秒后分散，1秒后显示第二次文字
+    setTimeout(() => {
+        isDispersing = true;
+        setTimeout(() => {
+            createTextParticles('祝卓然\n吃嘛嘛香\n天天开心', 110, 150);
+            isDispersing = false;
+
+            const checkParticleStatus = () => {
+                if (isAllParticlesReachedTarget()) {
+                    secondTextTimer = setTimeout(() => {
+                        isDispersing = true;
+                        setTimeout(() => {
+                            createTextParticles('2025\n有你相伴\n非常开心', 110, 150);
+                            isDispersing = false;
+                        }, 1000);
+                    }, 4000); // 第二次文字停留4秒
+                } else {
+                    setTimeout(checkParticleStatus, 100);
+                }
+            };
+            checkParticleStatus();
+
+        }, 1000);
+    }, 4000); // 初始文字停留4秒
+
+    // ==================== 动画循环 ====================
+    function animate() {
+        requestAnimationFrame(animate);
+
+        // 烟花淡出
+        ctx.fillStyle = 'rgba(0,0,0,0.15)';
+        ctx.fillRect(0, 0, width, height);
+
+        // 随机生成烟花
+        if (Math.random() < 0.06) {
+            fireworks.push(new Firework());
+        }
+
+        // 更新和绘制烟花
+        for (let i = fireworks.length - 1; i >= 0; i--) {
+            const f = fireworks[i];
+            f.update();
+            f.draw();
+            if (f.exploded && f.particles.length === 0) {
+                fireworks.splice(i, 1);
+            }
+        }
+
+        // 文字粒子
+        const timeSinceStart = Date.now() - particleStartTime;
+        textParticles.forEach(p => p.update(timeSinceStart, isDispersing));
+        if (isDispersing) {
+            textParticles = textParticles.filter(p => p.alpha > 0);
+        }
+        pctx.clearRect(0, 0, width, height);
+        textParticles.forEach(p => p.draw(timeSinceStart, isDispersing));
+
+        // 雪花
+        sctx.clearRect(0, 0, width, height);
+        snowflakes.forEach(s => {
+            s.update();
+            s.draw();
+        });
+        if (Math.random() < 0.02) {
+            snowflakes.push(new Snowflake());
+        }
+    }
+
+    // 点击烟花
+    document.addEventListener('click', (e) => {
+        const firework = new Firework();
+        firework.x = e.clientX;
+        firework.y = e.clientY;
+        firework.targetY = Math.random() * (height * 0.6);
+        fireworks.push(firework);
+    });
+
+    // 窗口变化时重新初始化雪花
+    window.addEventListener('resize', () => {
+        resize();
+        setTimeout(initSnowflakes, 200);
+    });
+
+    animate();
+</script>
+</body>
+</html>
