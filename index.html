@@ -34,12 +34,68 @@
             pointer-events: none;
             opacity: 1;
         }
+
+        /* 音乐控制按钮样式 */
+        .music-control {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background-color: rgba(255, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 100;
+            backdrop-filter: blur(5px);
+        }
+        
+        .music-icon {
+            width: 0;
+            height: 0;
+            border-style: solid;
+            border-width: 10px 0 10px 16px;
+            border-color: transparent transparent transparent #ffffff;
+        }
+        
+        .music-pause {
+            display: none;
+            width: 16px;
+            height: 20px;
+            position: relative;
+        }
+        
+        .music-pause::before, .music-pause::after {
+            content: "";
+            position: absolute;
+            width: 6px;
+            height: 20px;
+            background-color: #ffffff;
+        }
+        
+        .music-pause::after {
+            left: 10px;
+        }
     </style>
 </head>
 <body>
 <canvas id="fireworks"></canvas>
 <canvas id="particle-countdown"></canvas>
 <canvas id="snow-canvas"></canvas>
+
+<!-- 背景音乐元素 -->
+<audio id="bgm" loop>
+    <source src="https://img.tukuppt.com/newpreview_music/08/98/81/5c88be616d87775653.mp3" type="audio/mpeg">
+     您的浏览器不支持音频播放
+</audio>
+
+<!-- 音乐控制按钮 -->
+<div class="music-control" id="musicControl">
+    <div class="music-icon"></div>
+    <div class="music-pause"></div>
+</div>
 
 <script>
     const isMobile = /Mobile|Android|iOS/.test(navigator.userAgent);
@@ -48,6 +104,10 @@
     const fireworksCanvas = document.getElementById('fireworks');
     const particleCanvas = document.getElementById('particle-countdown');
     const snowCanvas = document.getElementById('snow-canvas');
+    const bgm = document.getElementById('bgm');
+    const musicControl = document.getElementById('musicControl');
+    const musicIcon = document.querySelector('.music-icon');
+    const musicPause = document.querySelector('.music-pause');
 
     const ctx = fireworksCanvas.getContext('2d');
     const pctx = particleCanvas.getContext('2d');
@@ -84,6 +144,44 @@
         resizeTimer = setTimeout(resize, 100);
     });
     resize();
+
+    // 音乐控制功能
+    function toggleMusic() {
+        if (bgm.paused) {
+            bgm.play().then(() => {
+                musicIcon.style.display = 'none';
+                musicPause.style.display = 'block';
+            }).catch(err => {
+                console.log('播放失败:', err);
+            });
+        } else {
+            bgm.pause();
+            musicIcon.style.display = 'block';
+            musicPause.style.display = 'none';
+        }
+    }
+
+    // 点击控制音乐播放/暂停
+    musicControl.addEventListener('click', toggleMusic);
+
+    // 尝试自动播放，大多数浏览器需要用户交互后才能播放音频
+    function tryAutoPlay() {
+        bgm.play().then(() => {
+            musicIcon.style.display = 'none';
+            musicPause.style.display = 'block';
+        }).catch(err => {
+            console.log('自动播放失败，等待用户交互:', err);
+        });
+    }
+
+    // 监听用户任何交互以触发播放
+    // document.addEventListener('click', tryAutoPlay, { once: true });
+    // document.addEventListener('touchstart', tryAutoPlay, { once: true });
+
+
+    window.onload = function() {
+      bgm.play().catch(e => console.log(e))
+    }
 
     let fireworks = [];
     let textParticles = [];
